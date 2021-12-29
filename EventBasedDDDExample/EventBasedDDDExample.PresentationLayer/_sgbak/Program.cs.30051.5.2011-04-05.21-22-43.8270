@@ -1,0 +1,232 @@
+﻿using System;
+using EventBasedDDD;
+using EventBasedDDDExample.DomainLayer;
+using EventBasedDDDExample.InMemoryPersistenceLayer;
+using Microsoft.Practices.Unity;
+
+namespace EventBasedDDDExample.PresentationLayer
+{
+    class Program
+    {
+        static void Main(string[] args)
+        {
+            InitializeIocAndFramework();
+
+            //下面这两个例子用来测试事件总线的最关键功能，利用这个功能，我们设计的所有的领域对象之间的交互不需要自己去完成。
+            //也就是说我们不再需要自己去从数据持久层获取领域对象，然后让它们进行交互协作了，所有的领域对象的获取工作均由框架自动完成。
+            TransferMoneyExample();
+            ForumTopicAndReplyExample();
+
+            //下面这个例子用来测试事件总线处理“Event继承”的功能是否正确
+            EventInheritanceExample();
+
+            //下面这个例子用来测试事件总线处理“DomainObject继承”的功能是否正确
+            DomainObjectInheritanceExample();
+
+            Console.WriteLine("");
+            Console.WriteLine("按任意键退出......");
+            Console.Read();
+        }
+
+        private static void InitializeIocAndFramework()
+        {
+            //初始化IoC
+            IUnityContainer container = new UnityContainer();
+            container.RegisterType<IObjectEventMapping, DomainLayerObjectEventMapping>(new ContainerControlledLifetimeManager());
+
+            container.RegisterInstance(typeof(BankAccountCollection), new BankAccountCollection());
+            container.RegisterInstance(typeof(CustomerCollection), new CustomerCollection());
+            container.RegisterInstance(typeof(ForumUserCollection), new ForumUserCollection());
+            container.RegisterInstance(typeof(ReplyCollection), new ReplyCollection());
+            container.RegisterInstance(typeof(TopicCollection), new TopicCollection());
+            container.RegisterInstance(typeof(TransferHistoryCollection), new TransferHistoryCollection());
+            container.RegisterInstance(typeof(PersonCollection), new PersonCollection());
+            container.RegisterInstance(typeof(TeacherCollection), new TeacherCollection());
+            container.RegisterInstance(typeof(ACollection), new ACollection());
+            container.RegisterInstance(typeof(BCollection), new BCollection());
+            container.RegisterInstance(typeof(CCollection), new CCollection());
+
+            //将IoC保存到静态变量中，以便永久保存该对象
+            UnityContainerHolder.UnityContainer = container;
+
+            //为框架提供一个InstanceLocator
+            InstanceLocator.SetLocator(new ExampleInstanceLocator());
+
+            //将所有Event和EventHandler建立映射关系
+            var eventSubscriberTypeMappingStore = EventSubscriberTypeMappingStore.Current;
+            eventSubscriberTypeMappingStore.ResolveEventSubscriberTypeMappings(typeof(BankAccount).Assembly);
+            eventSubscriberTypeMappingStore.ResolveEventSubscriberTypeMappings(typeof(BankAccountCollection).Assembly);
+        }
+
+        private static void TransferMoneyExample()
+        {
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.WriteLine("==============================================================================");
+            Console.WriteLine("TransferMoneyExample");
+            Console.WriteLine("==============================================================================");
+            Console.ForegroundColor = ConsoleColor.White;
+
+            //先创建两个客户（银行账户所有者）
+            Console.WriteLine("创建银行客户1");
+            var customer1 = Repository.Add(new Customer("customer1"));
+            Console.WriteLine("创建银行客户2");
+            var customer2 = Repository.Add(new Customer("customer2"));
+            //分别为这两个客户创建一个银行账户
+            Console.WriteLine("为银行客户1创建银行账户");
+            var bankAccount1 = Repository.Add(new BankAccount(customer1.Id));
+            Console.WriteLine("为银行客户2创建银行账户");
+            var bankAccount2 = Repository.Add(new BankAccount(customer2.Id));
+            //分别为每个账户增加5000元金额，以方便后面的转账操作
+            Console.WriteLine(Environment.NewLine + "为银行客户1的银行账户增加5000元金额，以方便后面的转账操作");
+            EventProcesser.ProcessEvent(new DepositAccountMoneyEvent { BankAccountId = bankAccount1.Id, MoneyAmount = 5000 });
+            Console.WriteLine("为银行客户2的银行账户增加5000元金额，以方便后面的转账操作");
+            EventProcesser.ProcessEvent(new DepositAccountMoneyEvent { BankAccountId = bankAccount2.Id, MoneyAmount = 5000 });
+
+            //查看账户1和账户2中的账户余额
+            Console.WriteLine(Environment.NewLine + "银行客户1的银行账户转账前的余额：{0}", bankAccount1.MoneyAmount);
+            Console.WriteLine("银行客户2的银行账户转账前的余额：{0}", bankAccount2.MoneyAmount);
+
+            //执行转账操作，从账户1转1000元金额到账户2中
+            Console.WriteLine(Environment.NewLine + "执行转账操作，从银行客户1的银行账户转1000元金额到银行客户2的银行账户中");
+            EventProcesser.ProcessEvent(new TransferEvent { FromBankAccountId = bankAccount1.Id, ToBankAccountId = bankAccount2.Id, MoneyAmount = 1000, TransferDate = DateTime.Now });
+
+            //查看账户1和账户2中的账户余额，以及转账记录
+            Console.WriteLine(Environment.NewLine + "银行客户1的银行账户转账后的余额：{0}", bankAccount1.MoneyAmount);
+            Console.WriteLine("银行客户2的银行账户转账后的余额：{0}", bankAccount2.MoneyAmount);
+
+            var transferHistoryOfAccount1 = Repository.Find<TransferHistory, FindBankAccountTransferHistoriesEvent>
+            (
+                evnt =>
+                {
+                    evnt.BankAccountId = bankAccount1.Id;
+                }
+            )[0];
+            var transferHistoryOfAccount2 = Repository.Find<TransferHistory, FindBankAccountTransferHistoriesEvent>
+            (
+                evnt =>
+                {
+                    evnt.BankAccountId = bankAccount2.Id;
+                }
+            )[0];
+
+            Console.WriteLine(Environment.NewLine + "银行客户1的银行账户的转账记录：");
+            Console.WriteLine(
+                "源帐号：{0}，目标帐号{1}，转账金额：{2}，转账金额：{3}",
+                transferHistoryOfAccount1.FromAccountId,
+                transferHistoryOfAccount1.ToAccountId,
+                transferHistoryOfAccount1.MoneyAmount,
+                transferHistoryOfAccount1.TransferDate);
+
+            Console.WriteLine("银行客户2的银行账户的转账记录：");
+            Console.WriteLine(
+                "源帐号：{0}，目标帐号{1}，转账金额：{2}，转账金额：{3}",
+                transferHistoryOfAccount2.FromAccountId,
+                transferHistoryOfAccount2.ToAccountId,
+                transferHistoryOfAccount2.MoneyAmount,
+                transferHistoryOfAccount2.TransferDate);
+        }
+        private static void ForumTopicAndReplyExample()
+        {
+            Console.WriteLine("");
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.WriteLine("==============================================================================");
+            Console.WriteLine("ForumTopicAndReplyExample");
+            Console.WriteLine("==============================================================================");
+            Console.ForegroundColor = ConsoleColor.White;
+
+            Console.WriteLine("创建一个论坛用户");
+            var forumUser = Repository.Add(new ForumUser("New User"));;
+            Console.WriteLine("该论坛用户的默认积分为：{0}", forumUser.TotalMarks);
+
+            Console.WriteLine(Environment.NewLine + "该论坛用户创建一个Topic");
+            var topic = new Topic(forumUser.Id, DateTime.Now, 0)
+            {
+                Subject = "A new forum topic.",
+                Body = "content of this topic.",
+                TotalMarks = 100
+            };
+            Repository.Add(topic);
+
+            Console.WriteLine("该论坛用户的当前积分为：{0}", forumUser.TotalMarks);
+            Console.WriteLine("新创建的Topic的积分为：{0}", topic.TotalMarks);
+            Console.WriteLine("新创建的Topic的Reply个数：{0}", topic.TotalReplyCount);
+
+            Console.WriteLine(Environment.NewLine + "为该Topic创建一个Reply");
+            var reply1 = Repository.Add(new Reply(topic.Id) { Body = "A new topic reply1." });
+            Console.WriteLine("创建Reply之后该Topic的Reply个数：{0}", topic.TotalReplyCount);
+
+            Console.WriteLine(Environment.NewLine + "再为该Topic创建一个Reply");
+            var reply2 = Repository.Add(new Reply(topic.Id) { Body = "A new topic reply2." });
+            Console.WriteLine("第二次创建Reply之后该Topic的Reply个数：{0}", topic.TotalReplyCount);
+
+            Console.WriteLine(Environment.NewLine + "删除一个Reply");
+            Repository.Remove(reply1);
+            Console.WriteLine("删除Reply之后该Topic的Reply个数：{0}", topic.TotalReplyCount);
+
+            Console.WriteLine(Environment.NewLine + "删除Topic");
+            Repository.Remove(topic);
+        }
+        private static void EventInheritanceExample()
+        {
+            Console.WriteLine("");
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.WriteLine("==============================================================================");
+            Console.WriteLine("EventInheritanceExample");
+            Console.WriteLine("==============================================================================");
+            Console.ForegroundColor = ConsoleColor.White;
+
+            Console.WriteLine(Environment.NewLine + "创建对象A");
+            A a = Repository.Add(new A());
+
+            Console.WriteLine("创建对象B");
+            B b = Repository.Add(new B());
+
+            Console.WriteLine("创建对象C");
+            C c = Repository.Add(new C());
+
+            Console.WriteLine(Environment.NewLine + "Publish EventA：");
+            EventProcesser.ProcessEvent(new EventA { EntityId = a.Id }, new EventA { EntityId = b.Id }, new EventA { EntityId = c.Id });
+
+            Console.WriteLine(Environment.NewLine + "Publish EventB：");
+            EventProcesser.ProcessEvent(new EventB { EntityId = a.Id }, new EventB { EntityId = b.Id }, new EventB { EntityId = c.Id });
+
+            Console.WriteLine(Environment.NewLine + "Publish EventC：");
+            EventProcesser.ProcessEvent(new EventC { EntityId = a.Id }, new EventC { EntityId = b.Id }, new EventC { EntityId = c.Id });
+        }
+        private static void DomainObjectInheritanceExample()
+        {
+            Console.WriteLine("");
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.WriteLine("==============================================================================");
+            Console.WriteLine("DomainObjectInheritanceExample");
+            Console.WriteLine("==============================================================================");
+            Console.ForegroundColor = ConsoleColor.White;
+
+            //Console.WriteLine("创建一个Person");
+            //var person1 = Repository.Add(new Person { Name = "person", Age = 35 });
+            Console.WriteLine("创建一个Teacher");
+            var person2 = Repository.Add(new Teacher { Name = "teacher", Age = 35, TeachYears = 8 });
+            //Console.WriteLine("创建一个Developer");
+            //var person3 = Repository.Add(new Developer { Name = "developer", Age = 35, DevelopmentYears = 5 });
+
+            //Console.WriteLine(Environment.NewLine + "Publish TeachEvent：");
+            //EventProcesser.ProcessEvent(
+            //    //new TeachEvent { TeacherId = person1.Id },
+            //    new TeachEvent { TeacherId = person2.Id }//,
+            //    //new TeachEvent { TeacherId = person3.Id }
+            //);
+
+            //Console.WriteLine(Environment.NewLine + "Publish CodeEvent：");
+            //EventProcesser.ProcessEvent(
+            //    new CodeEvent { DeveloperId = person1.Id },
+            //    new CodeEvent { DeveloperId = person2.Id },
+            //    new CodeEvent { DeveloperId = person3.Id }
+            //);
+
+            Console.WriteLine(Environment.NewLine + "Publish SleepEvent：");
+            EventProcesser.ProcessEvent(
+                new SleepEvent { PersonId = person2.Id }
+            );
+        }
+    }
+}

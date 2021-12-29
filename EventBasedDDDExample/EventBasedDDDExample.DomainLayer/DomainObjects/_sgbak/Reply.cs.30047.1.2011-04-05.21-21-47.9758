@@ -1,0 +1,34 @@
+﻿using System;
+using EventBasedDDD;
+
+namespace EventBasedDDDExample.DomainLayer
+{
+    public class Reply : DomainObject<Guid>
+    {
+        #region Constructors
+
+        public Reply(Guid topicId) : base(Guid.NewGuid())
+        {
+            this.TopicId = topicId;
+        }
+
+        #endregion
+
+        #region Public Properties
+
+        public Guid TopicId { get; private set; }     //主题ID
+        [TrackingProperty]
+        public string Body { get; set; }              //消息内容
+
+        #endregion
+
+        #region Event Handlers
+
+        private void Handle(DomainObjectRemovedEvent<Topic> evnt)
+        {
+            Repository.Remove(this);
+        }
+
+        #endregion
+    }
+}

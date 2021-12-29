@@ -1,0 +1,105 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
+using System.Runtime.CompilerServices;
+
+namespace EventBasedDDD
+{
+    public class EventSubscriberTypeMappingStore
+    {
+        #region Private Variables
+
+        private static EventSubscriberTypeMappingStore current = new EventSubscriberTypeMappingStore();
+        private Dictionary<Type, List<Type>> eventSubscriberTypeMappings = new Dictionary<Type, List<Type>>();
+        private Dictionary<Type, IEnumerable<MethodInfo>> subscriberEventHandlers = new Dictionary<Type, IEnumerable<MethodInfo>>();
+
+        #endregion
+
+        #region Public Properties
+
+        public static EventSubscriberTypeMappingStore Current
+        {
+            get { return current; }
+        }
+
+        #endregion
+
+        #region Public Methods
+
+        public void ResolveEventSubscriberTypeMappings(Assembly assembly)
+        {
+            foreach (var subscriberType in assembly.GetTypes().Where(type => type.IsClass && type.GetCustomAttributes(typeof(CompilerGeneratedAttribute), true).Count() == 0))
+            {
+                var eventHandlers = subscriberType.GetMethods(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public).Where(IsEventHandler);
+                subscriberEventHandlers.Add(subscriberType, eventHandlers);
+                foreach (var eventHandler in eventHandlers)
+                {
+                    var eventType = eventHandler.GetParameters()[0].ParameterType;
+                    List<Type> subscriberTypes = null;
+                    if (!eventSubscriberTypeMappings.TryGetValue(eventType, out subscriberTypes))
+                    {
+                        subscriberTypes = new List<Type>();
+                        eventSubscriberTypeMappings.Add(eventType, subscriberTypes);
+                    }
+                    AddSubscriberType(subscriberTypes, subscriberType);
+                }
+            }
+        }
+        public List<List<Type>> GetSubscriberTypesList(Type eventType)
+        {
+            List<List<Type>> subscriberTypesList = new List<List<Type>>();
+            foreach (var entry in eventSubscriberTypeMappings)
+            {
+                if (entry.Key.IsAssignableFrom(eventType))
+                {
+                    subscriberTypesList.Add(entry.Value);
+                }
+            }
+            return subscriberTypesList;
+            //return eventSubscriberTypeMappings.ToList().FindAll(pair => pair.Key.IsAssignableFrom(eventType)).Select(pair => pair.Value).ToList();
+        }
+        public IEnumerable<MethodInfo> GetEventHandlers(Type subscriberType)
+        {
+            IEnumerable<MethodInfo> eventHandlers = null;
+            if (!subscriberEventHandlers.TryGetValue(subscriberType, out eventHandlers))
+            {
+                eventHandlers = new List<MethodInfo>();
+            }
+            return eventHandlers;
+        }
+
+        #endregion
+
+        #region Private Methods
+
+        private bool IsEventHandler(MethodInfo methodInfo)
+        {
+            var parameters = methodInfo.GetParameters();
+            return parameters.Count() == 1 && typeof(IDomainEvent).IsAssignableFrom(parameters[0].ParameterType);
+        }
+        private void AddSubscriberType(List<Type> existingSubscriberTypes, Type subscriberType)
+        {
+            //Check if the current subscriberType is already exist.
+            if (existingSubscriberTypes.Exists(existingSubscriberType => existingSubscriberType == subscriberType))
+            {
+                return;
+            }
+
+            existingSubscriberTypes.Add(subscriberType);
+
+            ////Get the types which inherits from subscriberType.
+            //List<Type> subSubscriberTypes = existingSubscriberTypes.FindAll(existingSubscriberType => subscriberType.IsAssignableFrom(existingSubscriberType));
+            ////Remove all the sub subscriberTypes.
+            //subSubscriberTypes.ForEach(subSubscriberType => existingSubscriberTypes.Remove(subSubscriberType));
+
+            ////If there is no base subscriberTypes which the current subscriberType is inherit, then add the current subscriberType.
+            //if (!existingSubscriberTypes.Exists(existingSubscriberType => existingSubscriberType.IsAssignableFrom(subscriberType)))
+            //{
+            //    existingSubscriberTypes.Add(subscriberType);
+            //}
+        }
+
+        #endregion
+    }
+}

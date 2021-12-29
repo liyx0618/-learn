@@ -1,0 +1,16 @@
+﻿using System;
+using EventBasedDDD;
+using EventBasedDDDExample.DomainLayer;
+
+namespace EventBasedDDDExample.InMemoryPersistenceLayer
+{
+    public class PersonCollection : DomainObjectCollection<Person, Guid>
+    {
+    }
+    public class TeacherCollection : DomainObjectCollection<Teacher, Guid>
+    {
+    }
+    public class DeveloperCollection : DomainObjectCollection<Developer, Guid>
+    {
+    }
+}

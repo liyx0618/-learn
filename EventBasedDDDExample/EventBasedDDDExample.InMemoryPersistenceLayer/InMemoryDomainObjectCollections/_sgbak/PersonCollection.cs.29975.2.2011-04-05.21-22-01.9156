@@ -1,0 +1,37 @@
+﻿using System;
+using EventBasedDDD;
+using EventBasedDDDExample.DomainLayer;
+
+namespace EventBasedDDDExample.InMemoryPersistenceLayer
+{
+    public class PersonCollection : DomainObjectCollection<Person, Guid>
+    {
+        public override void Add(Person domainObject)
+        {
+            base.Add(domainObject);
+        }
+        public override void Remove(Person domainObject)
+        {
+            base.Remove(domainObject);
+        }
+        public override Person Get(Guid id)
+        {
+            return base.Get(id);
+        }
+    }
+    public class TeacherCollection : DomainObjectCollection<Teacher, Guid>
+    {
+        public override void Add(Teacher domainObject)
+        {
+            base.Add(domainObject);
+        }
+        public override void Remove(Teacher domainObject)
+        {
+            base.Remove(domainObject);
+        }
+        public override Teacher Get(Guid id)
+        {
+            return base.Get(id);
+        }
+    }
+}

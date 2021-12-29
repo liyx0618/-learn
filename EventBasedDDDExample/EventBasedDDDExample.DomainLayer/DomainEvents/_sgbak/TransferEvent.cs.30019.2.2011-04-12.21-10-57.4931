@@ -1,0 +1,13 @@
+﻿using System;
+using EventBasedDDD;
+
+namespace EventBasedDDDExample.DomainLayer
+{
+    public class TransferEvent : DomainEvent
+    {
+        public Guid FromBankAccountId { get; set; }
+        public Guid ToBankAccountId { get; set; }
+        public double MoneyAmount { get; set; }
+        public DateTime TransferDate { get; set; }
+    }
+}

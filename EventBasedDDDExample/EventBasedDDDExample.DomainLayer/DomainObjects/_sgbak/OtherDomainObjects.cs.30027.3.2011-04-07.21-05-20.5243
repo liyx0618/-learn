@@ -1,0 +1,76 @@
+﻿using System;
+using EventBasedDDD;
+
+namespace EventBasedDDDExample.DomainLayer
+{
+    public class Person : DomainObject<Guid>
+    {
+        public Person()
+            : base(Guid.NewGuid())
+        {
+        }
+
+        public string Name { get; set; }
+        public int Age { get; set; }
+
+        protected void Handle(SleepEvent evnt)
+        {
+            Console.WriteLine("{0} is sleeping.", this.GetType().Name);
+        }
+    }
+    public class Teacher : Person
+    {
+        public int TeachYears { get; set; }
+
+        private void Handle(TeachEvent evnt)
+        {
+            Console.WriteLine("{0} is teaching.", this.GetType().Name);
+        }
+    }
+    public class Developer : Person
+    {
+        public int DevelopmentYears { get; set; }
+
+        private void Handle(CodeEvent evnt)
+        {
+            Console.WriteLine("{0} is coding.", this.GetType().Name);
+        }
+    }
+
+    public class A : DomainObject<Guid>
+    {
+        public A()
+            : base(Guid.NewGuid())
+        {
+        }
+
+        private void Handle(EventA evnt)
+        {
+            Console.WriteLine(string.Format("A is handling {0}...", evnt.GetType().Name));
+        }
+    }
+    public class B : DomainObject<Guid>
+    {
+        public B()
+            : base(Guid.NewGuid())
+        {
+        }
+
+        private void Handle(EventB evnt)
+        {
+            Console.WriteLine(string.Format("B is handling {0}...", evnt.GetType().Name));
+        }
+    }
+    public class C : DomainObject<Guid>
+    {
+        public C()
+            : base(Guid.NewGuid())
+        {
+        }
+
+        private void Handle(EventC evnt)
+        {
+            Console.WriteLine(string.Format("C is handling {0}...", evnt.GetType().Name));
+        }
+    }
+}

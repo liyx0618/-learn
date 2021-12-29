@@ -1,0 +1,196 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+
+namespace EventBasedDDD
+{
+    public interface IObjectEventMapping
+    {
+        ObjectEventMappingItem GetObjectEventMappingItem(Type domainObjectType, Type eventType);
+    }
+    public abstract class ObjectEventMapping : IObjectEventMapping
+    {
+        #region Private Variables
+
+        private List<ObjectEventMappingItem> mappingItems = new List<ObjectEventMappingItem>();
+        private bool isMappingItemInitialized = false;
+
+        #endregion
+
+        #region Abstract Methods
+
+        protected abstract void InitializeObjectEventMappingItems();
+
+        #endregion
+
+        #region Register Methods
+
+        protected void RegisterObjectEventMappingItem<TEvent, TDomainObject>(Func<TEvent, object> GetDomainObjectId)
+            where TDomainObject : class, IDomainObject
+            where TEvent : IDomainEvent
+        {
+            RegisterObjectEventMappingItem<TEvent, TDomainObject>(
+                new GetDomainObjectIdEventHandlerInfo<TEvent>
+                {
+                    GetDomainObjectId = GetDomainObjectId
+                }
+            );
+        }
+        protected void RegisterObjectEventMappingItem<TEvent, TDomainObject>(Func<TEvent, IEnumerable<object>> GetDomainObjectIds)
+            where TDomainObject : class, IDomainObject
+            where TEvent : IDomainEvent
+        {
+            RegisterObjectEventMappingItem<TEvent, TDomainObject>(
+                new GetDomainObjectIdsEventHandlerInfo<TEvent>
+                {
+                    GetDomainObjectIds = GetDomainObjectIds
+                }
+            );
+        }
+        protected void RegisterObjectEventMappingItem<TEvent, TDomainObject>(Func<TEvent, IEnumerable<TDomainObject>> GetDomainObjects)
+            where TDomainObject : class, IDomainObject
+            where TEvent : IDomainEvent
+        {
+            RegisterObjectEventMappingItem<TEvent, TDomainObject>(
+                new GetDomainObjectsEventHandlerInfo<TEvent, TDomainObject>
+                {
+                    GetDomainObjects = GetDomainObjects
+                }
+            );
+        }
+        protected void RegisterObjectEventMappingItem<TEvent, TDomainObject>(params EventHandlerInfo[] eventHandlerInfos)
+            where TDomainObject : class, IDomainObject
+            where TEvent : IDomainEvent
+        {
+            var mappingItem = mappingItems.FirstOrDefault(mi => mi.EventType == typeof(TEvent) && mi.DomainObjectType == typeof(TDomainObject));
+            if (mappingItem != null)
+            {
+                throw new ApplicationException(
+                    string.Format("The domain object of type '{0}' has already registered to domain event '{1}'.",
+                    typeof(TDomainObject).Name,
+                    typeof(TEvent).Name));
+            }
+            mappingItems.Add(new ObjectEventMappingItem
+            {
+                DomainObjectType = typeof(TDomainObject),
+                EventType = typeof(TEvent),
+                EventHandlerInfos = eventHandlerInfos,
+            });
+        }
+
+        #endregion
+
+        #region Public Methods
+
+        public ObjectEventMappingItem GetObjectEventMappingItem(Type domainObjectType, Type eventType)
+        {
+            if (!isMappingItemInitialized)
+            {
+                InitializeObjectEventMappingItems();
+                isMappingItemInitialized = true;
+            }
+            if (mappingItems != null && mappingItems.Count > 0)
+            {
+                return mappingItems.FirstOrDefault(mappingItem => mappingItem.DomainObjectType == domainObjectType && mappingItem.EventType == eventType);
+            }
+            return null;
+        }
+
+        #endregion
+    }
+    public class ObjectEventMappingItem
+    {
+        public Type EventType { get; set; }
+        public Type DomainObjectType { get; set; }
+        public IEnumerable<EventHandlerInfo> EventHandlerInfos { get; set; }
+    }
+
+    #region EventHandlerInfo
+
+    public class EventHandlerInfo
+    {
+        public string EventHandlerName { get; set; }
+    }
+    public class GetDomainObjectIdEventHandlerInfo : EventHandlerInfo
+    {
+        public Func<IDomainEvent, object> GetDomainObjectId { get; set; }
+    }
+    public class GetDomainObjectIdsEventHandlerInfo : EventHandlerInfo
+    {
+        public Func<IDomainEvent, IEnumerable<object>> GetDomainObjectIds { get; set; }
+    }
+    public class GetDomainObjectsEventHandlerInfo : EventHandlerInfo
+    {
+        public Func<IDomainEvent, IEnumerable<IDomainObject>> GetDomainObjects { get; set; }
+    }
+
+    public class GetDomainObjectIdEventHandlerInfo<TEvent> : GetDomainObjectIdEventHandlerInfo
+        where TEvent : IDomainEvent
+    {
+        private Func<TEvent, object> eventHandlerInfo = null;
+
+        public new Func<TEvent, object> GetDomainObjectId
+        {
+            get
+            {
+                if (eventHandlerInfo == null)
+                {
+                    eventHandlerInfo = evnt => base.GetDomainObjectId(evnt);
+                }
+                return eventHandlerInfo;
+            }
+            set
+            {
+                eventHandlerInfo = null;
+                base.GetDomainObjectId = evnt => value((TEvent)evnt);
+            }
+        }
+    }
+    public class GetDomainObjectIdsEventHandlerInfo<TEvent> : GetDomainObjectIdsEventHandlerInfo
+        where TEvent : IDomainEvent
+    {
+        private Func<TEvent, IEnumerable<object>> eventHandlerInfo = null;
+
+        public new Func<TEvent, IEnumerable<object>> GetDomainObjectIds
+        {
+            get
+            {
+                if (eventHandlerInfo == null)
+                {
+                    eventHandlerInfo = evnt => base.GetDomainObjectIds(evnt);
+                }
+                return eventHandlerInfo;
+            }
+            set
+            {
+                eventHandlerInfo = null;
+                base.GetDomainObjectIds = evnt => value((TEvent)evnt);
+            }
+        }
+    }
+    public class GetDomainObjectsEventHandlerInfo<TEvent, TDomainObject> : GetDomainObjectsEventHandlerInfo
+        where TEvent : IDomainEvent
+        where TDomainObject : class, IDomainObject
+    {
+        private Func<TEvent, IEnumerable<TDomainObject>> eventHandlerInfo = null;
+
+        public new Func<TEvent, IEnumerable<TDomainObject>> GetDomainObjects
+        {
+            get
+            {
+                if (eventHandlerInfo == null)
+                {
+                    eventHandlerInfo = evnt => base.GetDomainObjects(evnt).OfType<TDomainObject>();
+                }
+                return eventHandlerInfo;
+            }
+            set
+            {
+                eventHandlerInfo = null;
+                base.GetDomainObjects = evnt => value((TEvent)evnt);
+            }
+        }
+    }
+
+    #endregion
+}

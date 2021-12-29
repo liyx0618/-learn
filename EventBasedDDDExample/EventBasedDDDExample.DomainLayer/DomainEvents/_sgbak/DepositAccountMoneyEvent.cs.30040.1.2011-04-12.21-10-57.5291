@@ -1,0 +1,11 @@
+﻿using System;
+using EventBasedDDD;
+
+namespace EventBasedDDDExample.DomainLayer
+{
+    public class DepositAccountMoneyEvent : DomainEvent
+    {
+        public Guid BankAccountId { get; set; }
+        public double MoneyAmount { get; set; }
+    }
+}
